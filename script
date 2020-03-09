@@ -1,0 +1,6 @@
+#! /usr/bin/env bash
+
+ROOT=$PWD
+cd out/production/ru.ifmo.rain.zagretdinov.implementor
+java -cp . -p . --module-path ${ROOT}/artifacts:${ROOT}/lib \
+    -m info.kgeorgiy.java.advanced.implementor jar-class ru.ifmo.rain.zagretdinov.implementor.Implementor $1
