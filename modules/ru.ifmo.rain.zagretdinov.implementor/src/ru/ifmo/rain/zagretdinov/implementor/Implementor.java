@@ -101,18 +101,18 @@ public class Implementor implements Impler, JarImpler {
             try {
                 if (args.length == 2) {
                     new Implementor().implement(Class.forName(args[0]), Path.of(args[1]));
-                } else if (!"-jar".equals(args[0]) && !"--jar".equals(args[0])) {
-                    System.err.printf("Invalid argument usage: only option available is -jar and %s given", args[0]);
-                } else {
+                } else if (args[0].equals("-jar") || args[0].equals("--jar")) {
                     new Implementor().implementJar(Class.forName(args[1]), Path.of(args[2]));
+                } else {
+                    System.err.println("expected -jar or --jar");
                 }
             } catch (ClassNotFoundException e) {
-                System.err.printf("Invalid class name given: %s\n", e.getMessage());
+                System.err.println("Invalid class name given: " + e.getMessage());
             } catch (InvalidPathException e) {
-                System.err.printf("Invalid path given: %s\n", e.getMessage());
+                System.err.println("Invalid path given: " + e.getMessage());
             } catch (ImplerException e) {
-                System.err.printf("Error while creating %s file: %s\n", args.length == 2 ? "java" : "jar",
-                        e.getMessage());
+                System.err.println("Error while creating " +
+                        ((args.length == 2) ? "java" : "jar") + " file " + e.getMessage());
             }
         }
     }
@@ -196,11 +196,10 @@ public class Implementor implements Impler, JarImpler {
         return "";
     }
 
-    //TODO
     /**
-     *
-     * @param token
-     * @return
+     * Changes every <code>'.'</code> symbol to {@code File.separatorChar}
+     * @param token {@link Class} which name of a package is to be changed.
+     * @return {@link String} which has every '.' symbol replaced with {@code File.separatorChar}
      */
     private String getFilePath(Class<?> token) {
         return token.getPackageName().replace('.', File.separatorChar);
@@ -215,18 +214,16 @@ public class Implementor implements Impler, JarImpler {
         return token.getSimpleName() + "Impl";
     }
 
-    /** Function used to create a compiled <code>.jar</code> file implementing methods in given class or interface.
+    /**
+     * Function used to create a compiled <code>.jar</code> file implementing methods in given class or interface.
      *  Uses {@link #compileClass(Class, Path)} to compile a file, {@link #implement(Class, Path)}
      *  to implement {@code token} class in location specified by {@code jarFile}.
-     * @param token type token to create implementation for.
+     * @param token {@link Class} to create implementation for.
      * @param jarFile target future <tt>.jar</tt> file.
      * @throws ImplerException if {@link Class} or {@link Path} is null.
      */
     @Override
     public void implementJar(Class<?> token, Path jarFile) throws ImplerException {
-        if (token == null || jarFile == null) {
-            throw new ImplerException("");
-        }
         ImplementorFileUtils.createDirectoriesTo(jarFile.normalize());
         ImplementorFileUtils utils = new ImplementorFileUtils(jarFile.toAbsolutePath().getParent());
         try {
@@ -238,7 +235,14 @@ public class Implementor implements Impler, JarImpler {
         }
     }
 
-    static String getImplementationPath(Class<?> token) {
+    /**
+     * Gets implementation path of a given file. Changes splitters in path with
+     * <code>File.separator</code>
+     * @param token {@link Class} to get path of its implementation.
+     * @return {@link String} of implementation path where <code>"\\."</code> splitter
+     * is replaced by <code>File.separator</code>
+     */
+    private static String getImplementationPath(Class<?> token) {
         return String.join(File.separator, token.getPackageName().split("\\.")) +
                 File.separator +
                 token.getSimpleName();
@@ -260,25 +264,23 @@ public class Implementor implements Impler, JarImpler {
         } catch (InvalidPathException e) {
             throw new ImplerException("Failed to generate valid classpath", e);
         }
-
         JavaCompiler javaCompiler = ToolProvider.getSystemJavaCompiler();
         if (javaCompiler == null) {
             throw new ImplerException("No compiler provided");
         }
-
         String[] compilerArgs = {
                 "-cp",
                 tmpDir.toString() + File.pathSeparator + superPath.toString(),
                 Path.of(tmpDir.toString(), getImplementationPath(token) + "Impl.java").toString(),
         };
-
         int returnCode = javaCompiler.run(null, null, null, compilerArgs);
         if (returnCode != 0) {
             throw new ImplerException("Implementation compilation returned non-zero code " + returnCode);
         }
     }
 
-    /** Creates a <code>.jar</code> file containing implementation for a given class or interface.
+    /**
+     * Creates a <code>.jar</code> file containing implementation for a given class or interface.
      * Creates a {@link Manifest} for an <code>.jar</code> file.
      * @param jarFile target <tt>.jar</tt> file.
      * @param tempDirectory {@link Path} for a temporary directory used for building a compiled
@@ -289,18 +291,18 @@ public class Implementor implements Impler, JarImpler {
     private void buildJar(Path jarFile, Path tempDirectory, Class<?> token) throws ImplerException {
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-
         try (JarOutputStream stream = new JarOutputStream(Files.newOutputStream(jarFile), manifest)) {
             String pathSuffix = token.getName().replace('.', '/') + "Impl.class";
             stream.putNextEntry(new ZipEntry(pathSuffix));
             Files.copy(Paths.get(tempDirectory.toString(), pathSuffix), stream);
         } catch (IOException e) {
-            throw new ImplerException(e.getMessage());
+            throw new ImplerException("Could not write to " + jarFile);
         }
     }
 
-    /** Function used to create a <code>.java</code> file implementing methods in given class or interface.
-     *  to implement {@code token} class in location specified by {@code root}.
+    /**
+     * Function used to create a <code>.java</code> file implementing methods in given class or interface.
+     * to implement {@code token} class in location specified by {@code root}.
      * @param token type token to create implementation for.
      * @param root target future <tt>.jar</tt> file.
      * @throws ImplerException if {@link Path} is incorrect, could not create parent directories for a path
@@ -335,7 +337,8 @@ public class Implementor implements Impler, JarImpler {
         }
     }
 
-    /** Returns default value for a given class.
+    /**
+     *  Returns default value for a given class.
      * @param clazz default value for which should be returned
      * @return {@link String} containing default value for a given {@link Class}
      */
@@ -351,7 +354,8 @@ public class Implementor implements Impler, JarImpler {
         }
     }
 
-    /** Writes methods which override parent's ones.
+    /**
+     * Writes methods which override parent's ones.
      * @param methodsHashed {@link Set} to check whether this method was worked with before
      * @param methods of given class
      * @param modifier1 modifier for a {@link Class}
@@ -376,7 +380,8 @@ public class Implementor implements Impler, JarImpler {
         });
     }
 
-    /** Class for creating constructors parameters. It contains one {@link Integer} field which can be
+    /**
+     * Class for creating constructors parameters. It contains one {@link Integer} field which can be
      * incremented.
      */
     private class Indices {
@@ -390,7 +395,8 @@ public class Implementor implements Impler, JarImpler {
         }
     }
 
-    /** Writes to generated file implementations of methods and constructors.
+    /**
+     * Writes to generated file implementations of methods and constructors.
      * @param token {@link Class} implementation of which is needed.
      * @param bufferedWriter for writing methods body in generated class
      * @throws ImplerException if there are no non-private constructors for a given class.
@@ -425,7 +431,8 @@ public class Implementor implements Impler, JarImpler {
         }
     }
 
-    /** Writes implementation for a given method. Uses {@link #getMethodBody(Method)} to write implementation,
+    /**
+     *  Writes implementation for a given method. Uses {@link #getMethodBody(Method)} to write implementation,
      * if {@link IOException} happens, message is printed.
      * @param method for which implementation is written
      * @param bufferedWriter used to write implementation to <code>.jar</code> or <code>.java</code> file.
@@ -439,7 +446,8 @@ public class Implementor implements Impler, JarImpler {
         }
     }
 
-    /** Writes implementation for a given method.
+    /**
+     * Writes implementation for a given method.
      * @param method for which implementation is written
      * @return {@link String} containing implementation for a {@link Method} in generated class.
      */
@@ -454,7 +462,8 @@ public class Implementor implements Impler, JarImpler {
                         OPER_SEP, Tabs(1) + BLOCK_END));
     }
 
-    /** Writes implementation for a given constructor.
+    /**
+     * Writes implementation for a given constructor.
      * @param constructor for which implementation is written
      * @return {@link String} containing implementation for a {@link Constructor} in generated class.
      */
@@ -467,7 +476,8 @@ public class Implementor implements Impler, JarImpler {
                         + OPER_SEP, BLOCK_END));
     }
 
-    /** Writes a string with collection of exceptions. Prepends with "throws" if at least one {@link Exception}
+    /**
+     * Writes a string with collection of exceptions. Prepends with "throws" if at least one {@link Exception}
      * could be thrown.
      * @param exceptionTypes possible exception types of a given method
      * @return {@link String} containing collection of {@link Exception}s, separated by {@link #COLLECTION_SEPARATOR}
@@ -477,7 +487,8 @@ public class Implementor implements Impler, JarImpler {
                 elementsToString(COLLECTION_SEPARATOR, exceptionTypes, Class::getName);
     }
 
-    /** Produces a {@link String} of method parameters. Uses {@link Indices} to get different identifier to
+    /**
+     * Produces a {@link String} of method parameters. Uses {@link Indices} to get different identifier to
      * the instance of each parameter
      * @param parameterTypes parameters of method implementation of which is needed
      * @return {@link String} containing collection of pairs consisting of parameter type, {{@link #SPACE},}
@@ -490,7 +501,8 @@ public class Implementor implements Impler, JarImpler {
                         parameter -> elementsSpaced(parameter.getCanonicalName(), "_" + indices.add()));
     }
 
-    /** Produces a {@link String} of method parameters identifiers. Uses {@link Indices} to get different identifier to
+    /**
+     * Produces a {@link String} of method parameters identifiers. Uses {@link Indices} to get different identifier to
      * the instance of each parameter
      * @param parameterTypes parameters of method implementation of which is needed
      * @return {@link String} containing collection of  separated by {@link #SPACE}
@@ -501,7 +513,8 @@ public class Implementor implements Impler, JarImpler {
                 elementsInCollectionToString(parameterTypes, parameter -> elementsSpaced("_" + indices.add()));
     }
 
-    /** Writes class modifiers. Gets {@link Modifier} of {@link Class} and writes a string containing all of them
+    /**
+     * Writes class modifiers. Gets {@link Modifier} of {@link Class} and writes a string containing all of them
      * excluding {@code Modifier.ABSTRACT}, {@code Modifier.INTERFACE}, {@code Modifier.STATIC}
      * and {@code Modifier.PROTECTED}
      * @param token {@link Class} modifiers of which are expected in return.
@@ -513,7 +526,8 @@ public class Implementor implements Impler, JarImpler {
                 ~Modifier.INTERFACE & ~Modifier.STATIC & ~Modifier.PROTECTED);
     }
 
-    /** Writes method modifiers. Gets {@link Modifier} of {@link Method} and writes a string containing all of them
+    /**
+     * Writes method modifiers. Gets {@link Modifier} of {@link Method} and writes a string containing all of them
      * excluding {@code Modifier.ABSTRACT} and {@code Modifier.TRANSIENT}
      * @param m methods modifiers of which are expected in return.
      * @return {@link String} containing modifiers of a given method excluding {@code Modifier.ABSTRACT} and
